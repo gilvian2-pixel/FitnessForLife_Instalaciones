@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fitness for Life — Installation Pipeline</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.4/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #f4f5f7;
+      --surface:   #ffffff;
+      --surface2:  #f0f2f5;
+      --border:    rgba(0,0,0,0.09);
+      --border2:   rgba(0,0,0,0.15);
+      --text:      #111827;
+      --muted:     #6b7280;
+      --radius:    10px;
+      --radius-lg: 14px;
+      --font:      -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+    input, select, textarea, button { font-family: var(--font); }
+    a { color: inherit; }
+
+    /* ── Utility classes ── */
+    .btn {
+      cursor: pointer; border: 1px solid var(--border2); background: var(--surface);
+      color: var(--text); border-radius: 8px; padding: 6px 14px; font-size: 13px;
+      transition: background .15s, opacity .15s; white-space: nowrap;
+    }
+    .btn:hover { background: var(--surface2); }
+    .btn.primary { background: #111827; color: #fff; border-color: #111827; }
+    .btn.primary:hover { opacity: .85; }
+    .btn.danger  { color: #ef4444; border-color: #ef4444; background: transparent; }
+    .btn.danger:hover  { background: rgba(239,68,68,.06); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .inp {
+      width: 100%; padding: 8px 11px; border: 1px solid var(--border2);
+      border-radius: 8px; font-size: 13px; background: var(--surface); color: var(--text);
+      outline: none; transition: border-color .15s;
+    }
+    .inp:focus { border-color: #111827; }
+
+    .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; display: block; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 14px; cursor: pointer;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .card:hover { border-color: var(--border2); box-shadow: 0 2px 8px rgba(0,0,0,.07); }
+
+    .nav-tab {
+      cursor: pointer; padding: 6px 14px; border-radius: 8px; font-size: 13px;
+      color: var(--muted); background: transparent; border: none; transition: all .15s;
+    }
+    .nav-tab:hover  { background: var(--surface2); color: var(--text); }
+    .nav-tab.active { background: var(--surface2); color: var(--text); font-weight: 600; }
+
+    .badge {
+      font-size: 11px; padding: 3px 9px; border-radius: 20px;
+      font-weight: 600; white-space: nowrap;
+    }
+
+    .doc-chip {
+      display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+      padding: 3px 8px; border-radius: 6px; background: var(--surface2);
+      color: var(--muted); border: 1px solid var(--border);
+    }
+
+    /* ── Overlay / drawer ── */
+    .overlay {
+      position: fixed; inset: 0; z-index: 200;
+      display: flex; background: rgba(0,0,0,0.35);
+    }
+    .drawer {
+      width: 460px; margin-left: auto;
+      background: var(--surface); height: 100vh;
+      overflow-y: auto; padding: 24px;
+      display: flex; flex-direction: column; gap: 16px;
+      border-left: 1px solid var(--border);
+    }
+
+    .modal-wrap {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,0.4);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal {
+      background: var(--surface); border-radius: 16px;
+      border: 1px solid var(--border); width: 100%; max-width: 560px;
+      max-height: 90vh; overflow-y: auto; padding: 24px;
+    }
+
+    /* ── Progress bar ── */
+    .pbar-track { height: 5px; background: #e5e7eb; border-radius: 3px; }
+    .pbar-fill  { height: 100%; border-radius: 3px; transition: width .3s; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty h3 { font-size: 15px; color: var(--text); margin: 12px 0 6px; font-weight: 600; }
+    .empty p  { font-size: 13px; margin-bottom: 20px; }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 2px dashed var(--border2); border-radius: 10px;
+      padding: 18px; text-align: center; cursor: pointer;
+      background: var(--surface2); transition: border-color .15s;
+    }
+    .upload-zone:hover { border-color: #6366f1; }
+
+    /* ── Responsive ── */
+    @media (max-width: 800px) {
+      .pipeline-grid { grid-template-columns: repeat(2, 1fr) !important; }
+      .drawer { width: 100%; }
+      .summary-bar { flex-wrap: wrap; }
+    }
+    @media (max-width: 500px) {
+      .pipeline-grid { grid-template-columns: 1fr !important; }
+      .form-row { grid-template-columns: 1fr !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    /* ─── Constants ─── */
+    const STAGES = [
+      { id:'quote',      label:'Quote / Proposal',   color:'#6366f1', bg:'rgba(99,102,241,.1)',   border:'rgba(99,102,241,.25)'  },
+      { id:'po',         label:'PO Received',         color:'#d97706', bg:'rgba(217,119,6,.1)',    border:'rgba(217,119,6,.25)'   },
+      { id:'production', label:'In Production',       color:'#ea580c', bg:'rgba(234,88,12,.1)',    border:'rgba(234,88,12,.25)'   },
+      { id:'ready',      label:'Ready to Install',    color:'#16a34a', bg:'rgba(22,163,74,.1)',    border:'rgba(22,163,74,.25)'   },
+      { id:'installed',  label:'Installed',           color:'#0891b2', bg:'rgba(8,145,178,.1)',    border:'rgba(8,145,178,.25)'   },
+    ];
+
+    const LEAD_MIN = 10, LEAD_MAX = 14, LEAD_MID = 12;
+    const EMPTY = { name:'', client:'', location:'', country:'', sqft:'', poNumber:'', poDate:'', installDate:'', stage:'quote', value:'', notes:'', documents:[] };
+
+    /* ─── Helpers ─── */
+    const stageObj   = id => STAGES.find(s => s.id === id) || STAGES[0];
+    const weeksAgo   = d  => d ? Math.floor((Date.now() - new Date(d)) / 6048e5) : null;
+    const daysUntil  = d  => d ? Math.ceil((new Date(d) - Date.now()) / 864e5) : null;
+    const fmtDate    = d  => d ? new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    const addDays    = (d, days) => new Date(new Date(d).getTime() + days * 86400000).toISOString().split('T')[0];
+    const urgColor   = days => days === null ? '#9ca3af' : days < 14 ? '#ef4444' : days < 45 ? '#f59e0b' : '#16a34a';
+
+    /* ─── Persistence ─── */
+    const STORE_KEY = 'ffl_pipeline_v1';
+    const loadProjects  = () => { try { const r = localStorage.getItem(STORE_KEY); return r ? JSON.parse(r) : []; } catch { return []; } };
+    const saveProjects  = (data) => { try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch {} };
+
+    /* ═══════════════════════════════════════════════════════
+       APP ROOT
+    ═══════════════════════════════════════════════════════ */
+    function App() {
+      const [projects, setProjects] = useState(loadProjects);
+      const [view,     setView]     = useState('pipeline');
+      const [showForm, setShowForm] = useState(false);
+      const [editId,   setEditId]   = useState(null);
+      const [detailId, setDetailId] = useState(null);
+
+      const persist = useCallback(next => { setProjects(next); saveProjects(next); }, []);
+
+      const handleSave   = data => {
+        const next = editId
+          ? projects.map(p => p.id === editId ? { ...p, ...data } : p)
+          : [...projects, { ...data, id: String(Date.now()), createdAt: new Date().toISOString() }];
+        persist(next);
+        setShowForm(false); setEditId(null);
+      };
+      const handleDelete = id  => { persist(projects.filter(p => p.id !== id)); setDetailId(null); };
+      const handleStage  = (id, stage) => persist(projects.map(p => p.id === id ? { ...p, stage } : p));
+      const openEdit     = id  => { setEditId(id); setShowForm(true); setDetailId(null); };
+
+      const editProject   = editId   ? projects.find(p => p.id === editId)   : null;
+      const detailProject = detailId ? projects.find(p => p.id === detailId) : null;
+
+      return (
+        <>
+          {/* ── Header ── */}
+          <header style={{ borderBottom:'1px solid var(--border)', background:'var(--surface)', padding:'0 24px', display:'flex', alignItems:'center', gap:20, height:54, position:'sticky', top:0, zIndex:100 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:30, height:30, borderRadius:7, background:'#111827', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                  <rect x="2" y="7" width="4" height="10" rx="1"/>
+                  <rect x="10" y="3" width="4" height="18" rx="1"/>
+                  <rect x="18" y="9" width="4" height="6" rx="1"/>
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, letterSpacing:'.3px' }}>FITNESS FOR LIFE</div>
+                <div style={{ fontSize:11, color:'var(--muted)' }}>Installation Pipeline</div>
+              </div>
+            </div>
+            <nav style={{ flex:1, display:'flex', gap:4 }}>
+              {[['pipeline','Pipeline'],['install','Install Schedule'],['all','All Projects']].map(([v,l]) => (
+                <button key={v} className={`nav-tab${view===v?' active':''}`} onClick={() => setView(v)}>{l}</button>
+              ))}
+            </nav>
+            <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+              <span style={{ fontSize:12, color:'var(--muted)' }}>{projects.length} project{projects.length!==1?'s':''}</span>
+              <button className="btn primary" onClick={() => { setEditId(null); setShowForm(true); }}>+ New Project</button>
+            </div>
+          </header>
+
+          {/* ── Summary bar ── */}
+          <div className="summary-bar" style={{ display:'flex', gap:4, padding:'10px 24px', background:'var(--surface)', borderBottom:'1px solid var(--border)' }}>
+            {STAGES.map(s => {
+              const n = projects.filter(p => p.stage === s.id).length;
+              return (
+                <div key={s.id} onClick={() => setView('pipeline')} style={{ flex:1, textAlign:'center', padding:'7px 4px', borderRadius:8, cursor:'pointer', background: n>0 ? s.bg : 'transparent', transition:'background .15s' }}>
+                  <div style={{ fontSize:20, fontWeight:700, color: n>0 ? s.color : '#d1d5db' }}>{n}</div>
+                  <div style={{ fontSize:11, color:'var(--muted)', lineHeight:1.2 }}>{s.label}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Main ── */}
+          <main style={{ padding:'22px 24px' }}>
+            {projects.length === 0
+              ? <div className="empty">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.3" style={{ display:'block', margin:'0 auto' }}>
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+                  </svg>
+                  <h3>No projects yet</h3>
+                  <p>Add your first project to start tracking installations across the Caribbean.</p>
+                  <button className="btn primary" onClick={() => { setEditId(null); setShowForm(true); }}>+ Add First Project</button>
+                </div>
+              : <>
+                  {view === 'pipeline' && <PipelineView projects={projects} onStage={handleStage} onDetail={setDetailId} />}
+                  {view === 'install'  && <InstallView  projects={projects} onDetail={setDetailId} />}
+                  {view === 'all'      && <AllView      projects={projects} onDetail={setDetailId} onEdit={openEdit} />}
+                </>
+            }
+          </main>
+
+          {/* ── Modals ── */}
+          {showForm && (
+            <ProjectForm
+              project={editProject}
+              onSave={handleSave}
+              onClose={() => { setShowForm(false); setEditId(null); }}
+            />
+          )}
+          {detailProject && (
+            <DetailPanel
+              project={detailProject}
+              onClose={() => setDetailId(null)}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              onStage={handleStage}
+            />
+          )}
+        </>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       PIPELINE VIEW (Kanban)
+    ═══════════════════════════════════════════════════════ */
+    function PipelineView({ projects, onStage, onDetail }) {
+      return (
+        <div className="pipeline-grid" style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0,1fr))', gap:12 }}>
+          {STAGES.map(stage => {
+            const cards = projects.filter(p => p.stage === stage.id);
+            return (
+              <div key={stage.id}>
+                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10 }}>
+                  <div style={{ width:9, height:9, borderRadius:'50%', background:stage.color }} />
+                  <span style={{ fontSize:12, fontWeight:600, color:'var(--text)' }}>{stage.label}</span>
+                  <span style={{ fontSize:11, color:'var(--muted)', marginLeft:'auto',
+                    background: cards.length ? stage.bg : 'var(--surface2)',
+                    color: cards.length ? stage.color : 'var(--muted)',
+                    borderRadius:20, padding:'1px 7px', fontWeight:600 }}>{cards.length}</span>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:8, minHeight:80,
+                  background:stage.bg, borderRadius:12, padding:8,
+                  border:`1px solid ${stage.border}` }}>
+                  {cards.map(p => <PipelineCard key={p.id} project={p} stage={stage} onDetail={onDetail} />)}
+                  {cards.length === 0 && <div style={{ textAlign:'center', padding:'18px 0', color:'var(--muted)', fontSize:12 }}>Empty</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    function PipelineCard({ project, stage, onDetail }) {
+      const days  = daysUntil(project.installDate);
+      const weeks = weeksAgo(project.poDate);
+      const urg   = urgColor(days);
+      const pct   = Math.min(100, Math.max(0, ((weeks || 0) / LEAD_MAX) * 100));
+      return (
+        <div className="card" onClick={() => onDetail(project.id)} style={{ padding:12 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', marginBottom:4, lineHeight:1.3 }}>{project.name}</div>
+          {(project.location || project.country) && (
+            <div style={{ fontSize:11, color:'var(--muted)', marginBottom:5 }}>
+              📍 {[project.location, project.country].filter(Boolean).join(', ')}
+            </div>
+          )}
+          {project.installDate && (
+            <div style={{ fontSize:11, fontWeight:600, color:urg, marginBottom:4 }}>
+              {days === null ? '' : days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today!' : `${days}d to install`}
+            </div>
+          )}
+          {project.poDate && stage.id !== 'quote' && (
+            <div style={{ marginTop:6 }}>
+              <div style={{ fontSize:10, color:'var(--muted)', marginBottom:3 }}>
+                Week {weeks ?? 0} of {LEAD_MIN}–{LEAD_MAX}
+              </div>
+              <div className="pbar-track">
+                <div className="pbar-fill" style={{ width:`${pct}%`, background: weeks >= LEAD_MID ? '#16a34a' : stage.color }} />
+              </div>
+            </div>
+          )}
+          {project.documents?.length > 0 && (
+            <div style={{ fontSize:10, color:'var(--muted)', marginTop:6 }}>📎 {project.documents.length} doc{project.documents.length!==1?'s':''}</div>
+          )}
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       INSTALL SCHEDULE VIEW
+    ═══════════════════════════════════════════════════════ */
+    function InstallView({ projects, onDetail }) {
+      const sorted = [...projects].sort((a, b) => {
+        if (!a.installDate && !b.installDate) return 0;
+        if (!a.installDate) return 1;
+        if (!b.installDate) return -1;
+        return new Date(a.installDate) - new Date(b.installDate);
+      });
+
+      const groups = {};
+      sorted.forEach(p => {
+        const key = p.installDate
+          ? new Date(p.installDate).toLocaleDateString('en-US',{month:'long',year:'numeric'})
+          : 'Date TBD';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+      });
+
+      return (
+        <div>
+          <div style={{ marginBottom:16, padding:'11px 14px', background:'#fffbeb', borderRadius:10, border:'1px solid #fde68a', fontSize:12, color:'#92400e' }}>
+            <strong>Installation Team View</strong> — sorted by install date. Equipment lead time is <strong>{LEAD_MIN}–{LEAD_MAX} weeks</strong> from PO date. Use location groupings to plan travel.
+          </div>
+          {Object.keys(groups).length === 0 && (
+            <div className="empty"><p>No projects with install dates yet.</p></div>
+          )}
+          {Object.entries(groups).map(([month, projs]) => (
+            <div key={month} style={{ marginBottom:28 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1.2, marginBottom:10, paddingBottom:6, borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:8 }}>
+                {month}
+                <span style={{ background:'var(--surface2)', borderRadius:20, padding:'1px 9px', fontWeight:600, color:'var(--text)', letterSpacing:0 }}>{projs.length}</span>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {projs.map(p => <InstallCard key={p.id} project={p} onDetail={onDetail} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function InstallCard({ project, onDetail }) {
+      const days    = daysUntil(project.installDate);
+      const weeks   = weeksAgo(project.poDate);
+      const stage   = stageObj(project.stage);
+      const urg     = urgColor(days);
+      const pct     = Math.min(100, Math.max(0, ((weeks || 0) / LEAD_MAX) * 100));
+      const d       = project.installDate ? new Date(project.installDate) : null;
+
+      return (
+        <div className="card" onClick={() => onDetail(project.id)} style={{ padding:'14px 16px' }}>
+          <div style={{ display:'flex', gap:14, alignItems:'flex-start' }}>
+
+            {/* Date block */}
+            <div style={{ width:58, flexShrink:0, textAlign:'center', background:'var(--surface2)', borderRadius:10, padding:'8px 4px', border:'1px solid var(--border)' }}>
+              {d ? (
+                <>
+                  <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, textTransform:'uppercase' }}>
+                    {d.toLocaleDateString('en-US',{month:'short'})}
+                  </div>
+                  <div style={{ fontSize:24, fontWeight:800, lineHeight:1.1, color:'var(--text)' }}>{d.getDate()}</div>
+                  <div style={{ fontSize:10, color:'var(--muted)' }}>{d.getFullYear()}</div>
+                </>
+              ) : (
+                <div style={{ fontSize:11, color:'var(--muted)', paddingTop:8 }}>TBD</div>
+              )}
+            </div>
+
+            {/* Content */}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8, marginBottom:6 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', lineHeight:1.2 }}>{project.name}</div>
+                <span className="badge" style={{ background:stage.bg, color:stage.color, border:`1px solid ${stage.border}`, flexShrink:0 }}>{stage.label}</span>
+              </div>
+
+              <div style={{ display:'flex', flexWrap:'wrap', gap:14, fontSize:12, color:'var(--muted)', marginBottom:8 }}>
+                {(project.location || project.country) && (
+                  <span>📍 <strong style={{ color:'var(--text)' }}>{[project.location,project.country].filter(Boolean).join(', ')}</strong></span>
+                )}
+                {project.client    && <span>👤 {project.client}</span>}
+                {project.sqft      && <span>📐 {Number(project.sqft).toLocaleString()} sq ft</span>}
+                {project.poNumber  && <span>🔖 PO {project.poNumber}</span>}
+                {project.value     && <span>💰 ${Number(project.value).toLocaleString()}</span>}
+              </div>
+
+              {/* Urgency */}
+              {project.installDate && (
+                <div style={{ fontSize:12, fontWeight:700, color:urg, marginBottom:7 }}>
+                  {days < 0 ? `⚠ ${Math.abs(days)} days overdue` : days === 0 ? '🔴 Install today!' : days <= 7 ? `🔴 ${days} days to install` : days <= 30 ? `🟡 ${days} days to install` : `${days} days to install`}
+                </div>
+              )}
+
+              {/* PO progress */}
+              {project.poDate && (
+                <div style={{ marginBottom:8 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--muted)', marginBottom:4 }}>
+                    <span>PO: {fmtDate(project.poDate)} · Week {weeks ?? 0} of {LEAD_MIN}–{LEAD_MAX}</span>
+                    <span style={{ fontWeight:600, color: weeks >= LEAD_MAX ? '#16a34a' : weeks >= LEAD_MIN ? '#d97706' : 'var(--muted)' }}>
+                      {weeks >= LEAD_MAX ? '✓ Equipment ready' : weeks >= LEAD_MIN ? 'Nearly ready' : `~${LEAD_MID - (weeks||0)}w remaining`}
+                    </span>
+                  </div>
+                  <div className="pbar-track" style={{ height:6 }}>
+                    <div className="pbar-fill" style={{ width:`${pct}%`, background: weeks >= LEAD_MID ? '#16a34a' : '#f59e0b' }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Documents */}
+              {project.documents?.length > 0 && (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:6 }}>
+                  {project.documents.map((doc, i) => (
+                    <span key={i} className="doc-chip">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      {doc.name}
+                      {doc.data && <a href={doc.data} download={doc.name} onClick={e=>e.stopPropagation()} style={{ color:'#6366f1' }}>↓</a>}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Notes */}
+              {project.notes && (
+                <div style={{ marginTop:8, fontSize:12, color:'var(--muted)', fontStyle:'italic', borderLeft:'2px solid #e5e7eb', paddingLeft:8 }}>
+                  {project.notes}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       ALL PROJECTS VIEW
+    ═══════════════════════════════════════════════════════ */
+    function AllView({ projects, onDetail, onEdit }) {
+      const [sort, setSort] = useState('installDate');
+      const [search, setSearch] = useState('');
+
+      const filtered = projects.filter(p =>
+        !search || [p.name,p.client,p.location,p.country,p.poNumber].some(v => v?.toLowerCase().includes(search.toLowerCase()))
+      );
+
+      const sorted = [...filtered].sort((a,b) => {
+        if (sort==='installDate') { if(!a.installDate)return 1; if(!b.installDate)return -1; return new Date(a.installDate)-new Date(b.installDate); }
+        if (sort==='name')     return a.name.localeCompare(b.name);
+        if (sort==='stage')    return STAGES.findIndex(s=>s.id===a.stage) - STAGES.findIndex(s=>s.id===b.stage);
+        if (sort==='location') return (a.country||'').localeCompare(b.country||'');
+        return 0;
+      });
+
+      return (
+        <div>
+          <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap', alignItems:'center' }}>
+            <input className="inp" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search projects…" style={{ width:220 }} />
+            <span style={{ fontSize:12, color:'var(--muted)' }}>Sort:</span>
+            {[['installDate','Install Date'],['name','Name'],['stage','Stage'],['location','Location']].map(([v,l])=>(
+              <button key={v} className={`btn${sort===v?' primary':''}`} style={{ padding:'5px 11px', fontSize:12 }} onClick={()=>setSort(v)}>{l}</button>
+            ))}
+          </div>
+          {sorted.length === 0
+            ? <div className="empty"><p>No matching projects.</p></div>
+            : <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px,1fr))', gap:10 }}>
+                {sorted.map(p => {
+                  const stage = stageObj(p.stage);
+                  const days  = daysUntil(p.installDate);
+                  return (
+                    <div key={p.id} className="card" onClick={()=>onDetail(p.id)}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', lineHeight:1.3 }}>{p.name}</div>
+                        <span className="badge" style={{ background:stage.bg, color:stage.color, border:`1px solid ${stage.border}`, marginLeft:8 }}>{stage.label}</span>
+                      </div>
+                      <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.9 }}>
+                        {(p.location||p.country) && <div>📍 {[p.location,p.country].filter(Boolean).join(', ')}</div>}
+                        {p.installDate && <div style={{ color:urgColor(days), fontWeight:600 }}>🗓 {fmtDate(p.installDate)} {days!==null?`(${days<0?Math.abs(days)+'d late':days+'d away'})`:''}</div>}
+                        {p.poNumber    && <div>🔖 PO {p.poNumber}{p.poDate?` · ${fmtDate(p.poDate)}`:''}</div>}
+                        {p.sqft        && <div>📐 {Number(p.sqft).toLocaleString()} sq ft</div>}
+                        {p.value       && <div>💰 ${Number(p.value).toLocaleString()}</div>}
+                      </div>
+                      {p.documents?.length>0 && <div style={{ marginTop:8, fontSize:11, color:'var(--muted)' }}>📎 {p.documents.length} document{p.documents.length!==1?'s':''}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+          }
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       DETAIL PANEL
+    ═══════════════════════════════════════════════════════ */
+    function DetailPanel({ project, onClose, onEdit, onDelete, onStage }) {
+      const stage   = stageObj(project.stage);
+      const days    = daysUntil(project.installDate);
+      const weeks   = weeksAgo(project.poDate);
+      const pct     = Math.min(100, Math.max(0, ((weeks||0)/LEAD_MAX)*100));
+      const [confirmDel, setConfirmDel] = useState(false);
+
+      return (
+        <div className="overlay" onClick={onClose}>
+          <div className="drawer" onClick={e=>e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
+              <div>
+                <div style={{ fontSize:18, fontWeight:800, color:'var(--text)', marginBottom:3 }}>{project.name}</div>
+                {project.client && <div style={{ fontSize:13, color:'var(--muted)' }}>{project.client}</div>}
+              </div>
+              <button className="btn" style={{ padding:'4px 10px' }} onClick={onClose}>✕</button>
+            </div>
+
+            {/* Stage selector */}
+            <div>
+              <div className="label">Stage</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                {STAGES.map(s => (
+                  <button key={s.id} onClick={()=>onStage(project.id, s.id)} style={{
+                    padding:'4px 11px', borderRadius:20, fontSize:12, cursor:'pointer', fontFamily:'var(--font)',
+                    background: s.id===project.stage ? s.bg    : 'transparent',
+                    color:      s.id===project.stage ? s.color : 'var(--muted)',
+                    border:     s.id===project.stage ? `1.5px solid ${s.border}` : '1px solid var(--border2)',
+                    fontWeight: s.id===project.stage ? 700 : 400,
+                  }}>{s.label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Info grid */}
+            <div style={{ background:'var(--surface2)', borderRadius:10, padding:14, display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px 20px', border:'1px solid var(--border)' }}>
+              {[
+                ['📍 Location', [project.location,project.country].filter(Boolean).join(', ')||'—'],
+                ['📐 Gym Size',  project.sqft ? `${Number(project.sqft).toLocaleString()} sq ft` : '—'],
+                ['🔖 PO Number', project.poNumber||'—'],
+                ['💰 Deal Value', project.value ? `$${Number(project.value).toLocaleString()}` : '—'],
+              ].map(([lbl,val])=>(
+                <div key={lbl}>
+                  <div style={{ fontSize:11, color:'var(--muted)', marginBottom:2 }}>{lbl}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Timeline */}
+            {(project.poDate||project.installDate) && (
+              <div style={{ background:'var(--surface2)', borderRadius:10, padding:14, border:'1px solid var(--border)' }}>
+                <div style={{ fontSize:12, fontWeight:700, marginBottom:12 }}>Timeline</div>
+
+                {project.poDate && (
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:5 }}>
+                      <span style={{ color:'var(--muted)' }}>PO date → equipment ready</span>
+                      <span style={{ fontWeight:700, color: weeks>=LEAD_MAX?'#16a34a':weeks>=LEAD_MIN?'#d97706':'var(--muted)' }}>
+                        Week {weeks??0} / {LEAD_MAX}
+                      </span>
+                    </div>
+                    <div className="pbar-track" style={{ height:8, position:'relative' }}>
+                      <div className="pbar-fill" style={{ width:`${pct}%`, background: weeks>=LEAD_MID?'#16a34a':'#f59e0b', height:'100%' }} />
+                      {[LEAD_MIN,LEAD_MAX].map(w=>(
+                        <div key={w} style={{ position:'absolute', top:0, bottom:0, left:`${(w/LEAD_MAX)*100}%`, width:1, background:'rgba(0,0,0,.2)', transform:'translateX(-50%)' }} />
+                      ))}
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--muted)', marginTop:3 }}>
+                      <span>PO: {fmtDate(project.poDate)}</span>
+                      <span>{LEAD_MIN}w &nbsp;&nbsp; {LEAD_MAX}w</span>
+                    </div>
+                    {project.poDate && (
+                      <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>
+                        Ready window: <strong>{fmtDate(addDays(project.poDate, LEAD_MIN*7))}</strong> – <strong>{fmtDate(addDays(project.poDate, LEAD_MAX*7))}</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {project.installDate && (
+                  <div style={{ padding:'10px 12px', borderRadius:8, background: urgColor(days)+'18', border:`1px solid ${urgColor(days)}44` }}>
+                    <div style={{ fontSize:11, color:'var(--muted)', marginBottom:2 }}>Expected install date</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:urgColor(days) }}>{fmtDate(project.installDate)}</div>
+                    <div style={{ fontSize:12, color:urgColor(days), fontWeight:600 }}>
+                      {days===null?'':days<0?`${Math.abs(days)} days overdue`:days===0?'Today!':days===1?'Tomorrow':`${days} days from now`}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Documents */}
+            <div>
+              <div style={{ fontSize:12, fontWeight:700, marginBottom:8 }}>Documents & Floor Plans</div>
+              {project.documents?.length > 0
+                ? <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    {project.documents.map((doc,i)=>(
+                      <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', background:'var(--surface2)', borderRadius:8, fontSize:12, border:'1px solid var(--border)' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <span style={{ flex:1, color:'var(--text)', fontWeight:500 }}>{doc.name}</span>
+                        {doc.size && <span style={{ color:'var(--muted)', fontSize:11 }}>{(doc.size/1024).toFixed(0)} KB</span>}
+                        {doc.data && <a href={doc.data} download={doc.name} style={{ color:'#6366f1', fontSize:11, textDecoration:'none', fontWeight:600 }}>Download</a>}
+                      </div>
+                    ))}
+                  </div>
+                : <div style={{ fontSize:12, color:'var(--muted)', fontStyle:'italic', padding:'10px 0' }}>No documents uploaded. Edit the project to add floor plans or drawings.</div>
+              }
+            </div>
+
+            {/* Notes */}
+            {project.notes && (
+              <div>
+                <div style={{ fontSize:12, fontWeight:700, marginBottom:6 }}>Notes</div>
+                <div style={{ fontSize:13, color:'var(--muted)', lineHeight:1.6, padding:'10px 12px', background:'var(--surface2)', borderRadius:8, borderLeft:'3px solid #e5e7eb' }}>
+                  {project.notes}
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize:11, color:'var(--muted)' }}>Added {fmtDate(project.createdAt)}</div>
+
+            {/* Actions */}
+            <div style={{ display:'flex', gap:8, marginTop:'auto', paddingTop:12, borderTop:'1px solid var(--border)' }}>
+              <button className="btn primary" style={{ flex:2 }} onClick={()=>onEdit(project.id)}>Edit Project</button>
+              {confirmDel
+                ? <button className="btn danger" style={{ flex:1 }} onClick={()=>onDelete(project.id)}>Confirm Delete</button>
+                : <button className="btn" style={{ flex:1 }} onClick={()=>setConfirmDel(true)}>Delete</button>
+              }
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       PROJECT FORM
+    ═══════════════════════════════════════════════════════ */
+    function ProjectForm({ project, onSave, onClose }) {
+      const [form, setForm]   = useState(project ? { ...EMPTY, ...project, documents: project.documents||[] } : { ...EMPTY });
+      const [newDocs, setNew] = useState([]);
+      const [saving, setSave] = useState(false);
+      const fileRef = useRef();
+
+      const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+      const handleFiles = files => {
+        Array.from(files).forEach(file => {
+          if (file.size > 3.5 * 1024 * 1024) {
+            setNew(d => [...d, { name:file.name, size:file.size, type:file.type, data:null }]);
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = e => setNew(d => [...d, { name:file.name, size:file.size, type:file.type, data:e.target.result }]);
+          reader.readAsDataURL(file);
+        });
+      };
+
+      const submit = async () => {
+        if (!form.name.trim()) return;
+        setSave(true);
+        await onSave({ ...form, documents:[...(form.documents||[]), ...newDocs] });
+        setSave(false);
+      };
+
+      const ready_from = form.poDate ? fmtDate(addDays(form.poDate, LEAD_MIN*7)) : null;
+      const ready_to   = form.poDate ? fmtDate(addDays(form.poDate, LEAD_MAX*7)) : null;
+
+      return (
+        <div className="modal-wrap" onClick={onClose}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+              <div style={{ fontSize:16, fontWeight:800 }}>{project?'Edit Project':'New Project'}</div>
+              <button className="btn" style={{ padding:'4px 10px' }} onClick={onClose}>✕</button>
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              {/* Name */}
+              <div>
+                <label className="label">Project / Hotel Name *</label>
+                <input className="inp" value={form.name} onChange={e=>set('name',e.target.value)} placeholder="e.g. Hyatt Centric San Juan" />
+              </div>
+
+              <div className="form-row" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                <div>
+                  <label className="label">Client / Contact Person</label>
+                  <input className="inp" value={form.client} onChange={e=>set('client',e.target.value)} placeholder="e.g. Maria González" />
+                </div>
+                <div>
+                  <label className="label">Deal Value ($)</label>
+                  <input className="inp" type="number" value={form.value} onChange={e=>set('value',e.target.value)} placeholder="0" />
+                </div>
+              </div>
+
+              <div className="form-row" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                <div>
+                  <label className="label">City / Location</label>
+                  <input className="inp" value={form.location} onChange={e=>set('location',e.target.value)} placeholder="e.g. San Juan" />
+                </div>
+                <div>
+                  <label className="label">Country / Island</label>
+                  <input className="inp" value={form.country} onChange={e=>set('country',e.target.value)} placeholder="e.g. Puerto Rico" />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Gym Size (sq ft)</label>
+                <input className="inp" type="number" value={form.sqft} onChange={e=>set('sqft',e.target.value)} placeholder="e.g. 3500" />
+              </div>
+
+              {/* PO Block */}
+              <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:10, padding:14 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#92400e', marginBottom:10 }}>
+                  Purchase Order — starts the {LEAD_MIN}–{LEAD_MAX} week production clock
+                </div>
+                <div className="form-row" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                  <div>
+                    <label className="label">PO Number</label>
+                    <input className="inp" value={form.poNumber} onChange={e=>set('poNumber',e.target.value)} placeholder="e.g. PO-2025-001" />
+                  </div>
+                  <div>
+                    <label className="label">PO Date</label>
+                    <input className="inp" type="date" value={form.poDate} onChange={e=>set('poDate',e.target.value)} />
+                  </div>
+                </div>
+                {form.poDate && (
+                  <div style={{ marginTop:8, fontSize:12, color:'#92400e', background:'#fef3c7', borderRadius:6, padding:'6px 10px' }}>
+                    Equipment ready window: <strong>{ready_from}</strong> → <strong>{ready_to}</strong>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="label">Expected Install Date</label>
+                <input className="inp" type="date" value={form.installDate} onChange={e=>set('installDate',e.target.value)} />
+              </div>
+
+              <div>
+                <label className="label">Stage</label>
+                <select className="inp" value={form.stage} onChange={e=>set('stage',e.target.value)}>
+                  {STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
+
+              {/* Documents */}
+              <div>
+                <label className="label">Documents & Floor Plans</label>
+                <div
+                  className="upload-zone"
+                  onClick={()=>fileRef.current?.click()}
+                  onDragOver={e=>e.preventDefault()}
+                  onDrop={e=>{e.preventDefault();handleFiles(e.dataTransfer.files);}}
+                >
+                  <input ref={fileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf,.xlsx,.doc,.docx,.csv" style={{ display:'none' }} onChange={e=>handleFiles(e.target.files)} />
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" style={{ display:'block', margin:'0 auto 6px' }}>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  <div style={{ fontSize:12, color:'var(--muted)' }}>Click or drag to upload — floor plans, drawings, specs, photos</div>
+                  <div style={{ fontSize:11, color:'#d1d5db', marginTop:3 }}>PDF, PNG, JPG, DWG, DOCX · Files over 3.5 MB saved as name only</div>
+                </div>
+
+                {/* Existing docs */}
+                {[...(form.documents||[]).map((d,i)=>({...d,isNew:false,i})), ...newDocs.map((d,i)=>({...d,isNew:true,i}))].length > 0 && (
+                  <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:5 }}>
+                    {(form.documents||[]).map((doc,i)=>(
+                      <div key={`e${i}`} style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, padding:'6px 10px', background:'var(--surface2)', borderRadius:7, border:'1px solid var(--border)' }}>
+                        <span style={{ flex:1, fontWeight:500 }}>{doc.name}</span>
+                        {doc.size && <span style={{ color:'var(--muted)', fontSize:11 }}>{(doc.size/1024).toFixed(0)} KB</span>}
+                        <button onClick={()=>set('documents',(form.documents||[]).filter((_,j)=>j!==i))} style={{ border:'none', background:'none', cursor:'pointer', color:'#ef4444', fontSize:16, padding:'0 2px' }}>×</button>
+                      </div>
+                    ))}
+                    {newDocs.map((doc,i)=>(
+                      <div key={`n${i}`} style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, padding:'6px 10px', background:'#f0fdf4', borderRadius:7, border:'1px solid #bbf7d0' }}>
+                        <span style={{ flex:1, fontWeight:500 }}>{doc.name}</span>
+                        <span style={{ color:'#16a34a', fontSize:11, fontWeight:600 }}>{doc.data?'ready':'name only'}</span>
+                        <button onClick={()=>setNew(d=>d.filter((_,j)=>j!==i))} style={{ border:'none', background:'none', cursor:'pointer', color:'#ef4444', fontSize:16, padding:'0 2px' }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="label">Notes for Installation Team</label>
+                <textarea className="inp" rows={3} value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Access hours, site contact, parking, special equipment requirements, permit status…" style={{ resize:'vertical' }} />
+              </div>
+
+              {/* Submit */}
+              <div style={{ display:'flex', gap:8, paddingTop:4 }}>
+                <button className="btn" style={{ flex:1 }} onClick={onClose}>Cancel</button>
+                <button className="btn primary" style={{ flex:2 }} onClick={submit} disabled={saving||!form.name.trim()}>
+                  {saving ? 'Saving…' : project ? 'Save Changes' : 'Add Project'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─── Mount ─── */
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
